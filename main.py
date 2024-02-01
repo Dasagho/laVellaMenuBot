@@ -1,54 +1,71 @@
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 import requests
 import pdfplumber
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import os
-
-
-# Cargar las variables de entorno del archivo .env
-load_dotenv()
-
-# Suponiendo que tienes una variable de entorno llamada 'TELEGRAM_TOKEN' en tu archivo .env
-TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+import logging
 
 # Función para extraer texto del PDF
+
+
 def extraer_texto_del_pdf(url):
-    response = requests.get(url, stream=True)
-    if response.status_code != 200:
-        return "Error: No se pudo acceder al PDF."
+    file_name = 'menu.pdf'
+    need_download = False
 
-    # Obtener la fecha actual para nombrar el archivo
-    fecha_actual = datetime.now().strftime('%d-%m-%Y')
-    nombre_archivo = f'{fecha_actual}.pdf'
+    # Comprobar si ya es pasado las 11:45 del día actual
+    now = datetime.now()
+    time_limit = now.replace(hour=11, minute=45, second=0, microsecond=0)
+    
+    # Si no es aún las 11:45 y el archivo existe, no descargarlo
+    if now < time_limit and os.path.exists(file_name):
+        need_download = True
 
-    # Guardar el PDF con el nombre de la fecha actual
-    with open(nombre_archivo, 'wb') as f:
-        f.write(response.content)
+    # Descargar el PDF si es necesario
+    if need_download:
+        response = requests.get(url, stream=True)
+        if response.status_code != 200:
+            return "Error: No se pudo acceder al PDF."
 
-    with pdfplumber.open(nombre_archivo) as pdf:
-        texto = ''
+        with open(file_name, 'wb') as f:
+            f.write(response.content)
+
+    # Extraer el texto del PDF
+    texto = ''
+    with pdfplumber.open(file_name) as pdf:
         for pagina in pdf.pages:
             texto += pagina.extract_text() or ''
     return texto
 
-# Comando /menu
-def menu(update: Update, context: CallbackContext) -> None:
+# Define la función que responderá al comando /menu
+
+
+async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     url = 'http://www.lavella.es/doc/Menu_normal.pdf'
     texto_extraido = extraer_texto_del_pdf(url)
-    update.message.reply_text(texto_extraido)
+    await update.message.reply_text(texto_extraido)
 
-# Función principal para iniciar el bot
+# Función principal
+
+
 def main():
-    updater = Updater(TELEGRAM_TOKEN)
+    # Cargar las variables de entorno del archivo .env
+    load_dotenv()
 
-    # Registrar el comando /menu
-    updater.dispatcher.add_handler(CommandHandler('menu', menu))
+    # Habilita el registro
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-    # Iniciar el bot
-    updater.start_polling()
-    updater.idle()
+    # Suponiendo que tienes una variable de entorno llamada 'TELEGRAM_TOKEN' en tu archivo .env
+    TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
+
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+
+    app.add_handler(CommandHandler("menu", menu))
+
+    app.run_polling()
+
 
 if __name__ == '__main__':
     main()
