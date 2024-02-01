@@ -18,9 +18,8 @@ def extraer_texto_del_pdf(url):
     now = datetime.now()
     time_limit = now.replace(hour=11, minute=45, second=0, microsecond=0)
 
-    # Si no es aún las 11:45 y el archivo existe, no descargarlo
-    if now < time_limit or os.path.exists(file_name):
-        need_download = True
+    # Marcar para descargar si es después de las 11:45 o si el archivo no existe
+    need_download = now > time_limit or not os.path.exists(file_name)
 
     # Descargar el PDF si es necesario
     if need_download:
